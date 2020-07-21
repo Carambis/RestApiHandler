@@ -21,10 +21,12 @@ public class SSMServiceImpl implements SSMService {
 		this.ssmAsyncClient = ssmAsyncClient;
 	}
 
-	public String getParameterFromParameterStore(String parameterName, boolean decrypt) throws SSMParameterStoreException {
+	@Override
+	public String getParameter(String envParameterName, boolean decrypt) throws SSMParameterStoreException {
 
 		String value = null;
-		GetParameterRequest request = GetParameterRequest.builder().name(parameterName).withDecryption(decrypt).build();
+		String ssmParameterName = System.getenv(envParameterName);
+		GetParameterRequest request = GetParameterRequest.builder().name(ssmParameterName).withDecryption(decrypt).build();
 
 		GetParameterResponse getParameterResponse = null;
 		try {

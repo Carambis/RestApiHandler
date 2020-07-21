@@ -1,7 +1,6 @@
 package com.company.handler.impl;
 
 import com.company.exception.S3Exception;
-import com.company.exception.SSMParameterStoreException;
 import com.company.handler.RestApiHandler;
 import com.company.rest.HttpService;
 import com.company.s3.S3Service;
@@ -22,8 +21,8 @@ import java.util.concurrent.CompletableFuture;
 @Singleton
 public class RestApiHandlerImpl implements RestApiHandler {
 
-	private final static Logger logger = LogManager.getLogger(RestApiHandlerImpl.class);
-	private final static ObjectMapper mapper = new ObjectMapper();
+	private final static Logger LOGGER = LogManager.getLogger(RestApiHandlerImpl.class);
+	private final static ObjectMapper MAPPER = new ObjectMapper();
 
 	private final S3Service s3Service;
 	private final SSMServiceImpl ssmService;
@@ -49,12 +48,12 @@ public class RestApiHandlerImpl implements RestApiHandler {
 
 		return getDataFromRestApi.thenCombine(getBucketName, (compress, bucketName) -> {
 			String status = "Problem with json uploading";
-			if (Objects.nonNull(compress) || Objects.nonNull(bucketName)) {
+			if (Objects.nonNull(compress) && Objects.nonNull(bucketName)) {
 				try {
 					s3Service.saveFileToS3Bucket(bucketName, compress, id);
 					status = "Json upload finished successfully";
 				} catch (S3Exception e) {
-					logger.error(e.getMessage());
+					LOGGER.error(e.getMessage());
 				}
 			}
 			return status;
@@ -66,13 +65,13 @@ public class RestApiHandlerImpl implements RestApiHandler {
 		return CompletableFuture.supplyAsync(() -> {
 			ByteArrayOutputStream byteArrayOutputStream = null;
 			try {
-				String url = getUrl();
+				String url = ssmService.getParameter(ParameterUtils.REST_API_PARAMETER_NAME, true);
 				var post = httpService.getDataFromRestApi(url, id);
-				byte[] bytes = mapper.writeValueAsBytes(post);
+				byte[] bytes = MAPPER.writeValueAsBytes(post);
 				byteArrayOutputStream = FileUtils.compressToGzip(bytes);
 			} catch (Exception e) {
-				logger.error("Incorrect Json from Rest api");
-				logger.error(e.getMessage());
+				LOGGER.error("Incorrect Json from Rest api");
+				LOGGER.error(e.getMessage());
 			}
 			return byteArrayOutputStream;
 		});
@@ -83,29 +82,18 @@ public class RestApiHandlerImpl implements RestApiHandler {
 		return CompletableFuture.supplyAsync(() -> {
 			String bucketName = null;
 			try {
-				bucketName = getBucketNameFromParameterStore();
+				bucketName = ssmService.getParameter(ParameterUtils.BUCKET_NAME, true);
 				boolean exist = s3Service.checkBucketExist(bucketName);
 				if (!exist) {
 					bucketName = null;
-					logger.error("Bucket not found");
+					LOGGER.error("Bucket not found");
 				}
 			} catch (Exception e) {
-				logger.error(e.getMessage());
+				LOGGER.error("Bucket not found");
+				LOGGER.error(e.getMessage());
 			}
 			return bucketName;
 		});
-	}
-
-	private String getUrl() throws SSMParameterStoreException {
-
-		String restApiParameterName = System.getenv(ParameterUtils.REST_API_PARAMETER_NAME);
-		return ssmService.getParameterFromParameterStore(restApiParameterName, true);
-	}
-
-	private String getBucketNameFromParameterStore() throws SSMParameterStoreException {
-
-		String bucketParameterName = System.getenv(ParameterUtils.BUCKET_NAME);
-		return ssmService.getParameterFromParameterStore(bucketParameterName, true);
 	}
 
 }
